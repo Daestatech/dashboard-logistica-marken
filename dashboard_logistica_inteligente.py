@@ -5,7 +5,7 @@ st.set_page_config(layout="wide")
 st.title("🚚 Central Logística Inteligente - Rede União Marken")
 
 # =========================
-# 📂 UPLOAD DE ARQUIVOS TXT
+# 📂 UPLOAD
 # =========================
 files = st.file_uploader(
     "Upload dos arquivos do ERP (.txt)",
@@ -18,7 +18,7 @@ if files:
     lista_dfs = []
 
     # =========================
-    # 📥 LEITURA DOS ARQUIVOS
+    # 📥 LEITURA
     # =========================
     for file in files:
         df = pd.read_csv(file, sep=";", encoding="latin1")
@@ -26,7 +26,7 @@ if files:
         lista_dfs.append(df)
 
     # =========================
-    # 🔗 UNIR BASES (8 LOJAS)
+    # 🔗 MERGE
     # =========================
     df_final = lista_dfs[0]
 
@@ -40,13 +40,25 @@ if files:
         )
 
     # =========================
-    # 🔴 FILTRO DE PRODUTOS
+    # 🔴 FILTRO POR PRODUTO
     # =========================
     palavras_bloqueadas = ("FLV", "BOVINO", "SUINO")
 
     df_final = df_final[
         ~df_final['DESCCOMPLETA'].str.upper().str.startswith(palavras_bloqueadas, na=False)
     ]
+
+    # =========================
+    # 🔴 FILTRO POR CATEGORIA
+    # =========================
+    categorias_bloqueadas = ("INSUMOS", "INSUMO E MATÉRIA PRIMA")
+
+    colunas_nivel = [col for col in df_final.columns if "NIVEL_1" in col]
+
+    for col in colunas_nivel:
+        df_final = df_final[
+            ~df_final[col].astype(str).str.upper().isin(categorias_bloqueadas)
+        ]
 
     # =========================
     # 🔍 IDENTIFICAR LOJAS
@@ -65,18 +77,17 @@ if files:
         df_final[est] = pd.to_numeric(df_final[est], errors='coerce').fillna(0)
 
     # =========================
-    # ❌ REMOVER PRODUTOS SEM ESTOQUE
+    # ❌ REMOVER SEM ESTOQUE
     # =========================
     col_estoques = [est for _, est in pares]
 
     df_final['TOTAL_ESTOQUE'] = df_final[col_estoques].sum(axis=1)
-
     df_final = df_final[df_final['TOTAL_ESTOQUE'] > 0]
 
     st.success(f"📦 Produtos analisados: {len(df_final)}")
 
     # =========================
-    # 🧠 LÓGICA LOGÍSTICA
+    # 🧠 LÓGICA
     # =========================
     def analisar(row):
         estoques = {}
@@ -88,7 +99,6 @@ if files:
             if pd.notna(loja):
                 estoques[str(loja)] = estoque
 
-        # segurança extra
         if not estoques:
             return pd.Series([None, None, 0, "Sem dados"])
 
@@ -113,7 +123,7 @@ if files:
     # =========================
     # 📊 KPIs
     # =========================
-    st.subheader("📊 KPIs Logísticos")
+    st.subheader("📊 KPIs")
 
     col1, col2, col3 = st.columns(3)
 
@@ -124,7 +134,7 @@ if files:
     # =========================
     # 🚨 PRIORIDADES
     # =========================
-    st.subheader("🚨 Prioridades de Transferência")
+    st.subheader("🚨 Prioridades")
 
     top = df_final.sort_values('DESEQUILIBRIO', ascending=False).head(20)
 
@@ -133,13 +143,10 @@ if files:
     # =========================
     # 📈 GRÁFICO
     # =========================
-    st.subheader("📈 Top Desequilíbrios")
-
     st.bar_chart(top.set_index('DESCCOMPLETA')['DESEQUILIBRIO'])
 
     # =========================
-    # 📋 BASE COMPLETA
+    # 📋 BASE
     # =========================
     st.subheader("📋 Base completa")
-
     st.dataframe(df_final)
